@@ -32,10 +32,11 @@ public class ApiUtilsLoader implements ApiUtilsInterface {
     private WriterService _writer;
     private ApiMapping mappingFactory = null;
 
-    private ApiClasses _defaultClasses = ApiObjectDef.returnClassDef();
-    private JsonObjectParser _objectParser = new JsonObjectParser(true);
+    private final ApiClasses _defaultClasses = ApiObjectDef.returnClassDef();
+    private final JsonObjectParser _objectParser = new JsonObjectParser(true);
 
-    private ScanResult _scanResult = null;
+    private static final ApiResources apiResources = ApiResources.getInstance();
+    
     
     public ApiUtilsLoader(ClassLoader loader, ParserService parser,
             WriterService writer) {
@@ -78,10 +79,6 @@ public class ApiUtilsLoader implements ApiUtilsInterface {
     @Override
     public void retrieveClasses(String company, String thisClass, ApiClasses classes,
             boolean verify) throws ApiException, ApiClassNotFoundException {
-        if (_scanResult == null) {
-            _scanResult = new ClassGraph().disableNestedJarScanning().acceptPaths("models").scan();
-        }
-        
         String strFileName = thisClass;
 
         if (!strFileName.startsWith("models/")) {
@@ -93,7 +90,7 @@ public class ApiUtilsLoader implements ApiUtilsInterface {
         }
 
         try {
-            ResourceList resources = _scanResult.getResourcesWithPath(strFileName);
+            ResourceList resources = apiResources.getResourcesWithWildcard(strFileName);
             
             if (!resources.isEmpty()) {
                 ApiClass newClass = getClassFromFile(resources.get(0));
@@ -123,11 +120,7 @@ public class ApiUtilsLoader implements ApiUtilsInterface {
     @Override
     public void retrievePackage(String company, String thisClass, ApiClasses classes,
             boolean verify) throws ApiException, ApiClassNotFoundException {
-        if (_scanResult == null) {
-            _scanResult = new ClassGraph().disableNestedJarScanning().acceptPaths("models").scan();
-        }
-        
-        ResourceList resources = _scanResult.getResourcesMatchingWildcard("models/" + thisClass + ".json");
+        ResourceList resources = apiResources.getResourcesWithWildcard("models/" + thisClass + ".json");
         
         for (var parsedFileName : resources) {
             retrieveClasses(company, parsedFileName.getPath(), classes);
@@ -191,15 +184,11 @@ public class ApiUtilsLoader implements ApiUtilsInterface {
         try {
             String salesJson = file.getContentAsString();
 
-            ApiClasses apiClasses = new ApiClasses();
-
             ApiObject obj = _objectParser.parseSingle(new StringReader(salesJson));
             obj.setApiClasses(_defaultClasses);
             obj.setApiClass(_defaultClasses.getClass("com.icg.isg.api.ApiClass"));
 
-            ApiClass cldObj = new ApiClass(obj);
-
-            return cldObj;
+            return new ApiClass(obj);
         } catch (ApiClassNotFoundException | IOException ex) {
             throw new ApiException(550, ex.getMessage());
         }
